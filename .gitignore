@@ -1,0 +1,10 @@
+.vscode/
+logs/
+src/.env
+src/.env.local
+src/__pycache__/
+src/logs/
+src/telegram_api.log
+src/user_session.session
+.env
+user_session.session
