@@ -1,13 +1,13 @@
 from flask import Flask, request, jsonify
 import threading
+from queue import Queue
+from threading import Lock
 from telethon import TelegramClient, events
 import asyncio
 import json
 import os
 from datetime import datetime
-from threading import Lock
-from queue import Queue
-from ..views.components.code_dialog import CodeInputDialog
+from src.views.components.code_dialog import CodeInputDialog
 
 class APIController:
     def __init__(self, view):

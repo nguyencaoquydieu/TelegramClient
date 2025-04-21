@@ -1,58 +1,64 @@
-# Telegram Client Project
+# Telegram Client
 
-This project is a simple Telegram bot that allows players to send and receive messages. It serves as a basic framework for building more complex interactions and functionalities.
+A desktop application for managing multiple Telegram accounts and sending messages via API.
 
 ## Project Structure
 
 ```
-telegram-client-project
-├── src
-│   ├── bot.py          # Main entry point for the Telegram bot
-│   ├── config.py       # Configuration settings for the bot
-│   └── utils
-│       └── helpers.py  # Utility functions for the bot
+TelegramClient/
+├── src/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── views/
+│   │   ├── __init__.py
+│   │   └── main_window.py
+│   ├── controllers/
+│   │   ├── __init__.py
+│   │   └── api_controller.py
+│   └── utils/
+│       ├── __init__.py
+│       └── logger_config.py
+├── config/
+├── logs/
+├── build.spec
+├── build.bat
+├── setup.bat
 ├── requirements.txt     # List of dependencies
 ├── .env                 # Environment variables
 ├── README.md            # Project documentation
 └── .gitignore           # Git ignore file
 ```
 
-## Setup Instructions
+## Installation
 
-1. **Clone the repository:**
-   ```
-   git clone https://github.com/yourusername/telegram-client-project.git
-   cd telegram-client-project
-   ```
+1. Extract all files from TelegramClient.tar.gz
+2. Run TelegramClient.exe
+3. First run will create example configuration
 
-2. **Create a virtual environment:**
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   ```
+## Configuration
 
-3. **Install dependencies:**
-   ```
-   pip install -r requirements.txt
-   ```
-
-4. **Set up environment variables:**
-   Create a `.env` file in the root directory and add your Telegram API token:
-   ```
-   TELEGRAM_API_TOKEN=your_api_token_here
-   ```
+1. Get your API credentials from <https://my.telegram.org/apps>
+2. Add your credentials in the application interface
+3. Click "Save All" to store credentials
+4. Click "Start API" to begin the service
 
 ## Usage
 
-To run the bot, execute the following command:
+The API server runs on <http://localhost:5000>
+
+Send messages using:
+
+```bash
+POST /send-message
+{
+    "phone": "+84123456789",
+    "destination": "@username",
+    "message": "Hello world"
+}
 ```
-python src/bot.py
-```
 
-## Contributing
+## Requirements
 
-Feel free to submit issues or pull requests if you have suggestions or improvements for the project.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more details.
+- Windows 7/10/11
+- No additional software required
+- Internet connection

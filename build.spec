@@ -1,4 +1,4 @@
-from PyInstaller.utils.hooks import collect_data_files
+# -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
 
@@ -7,13 +7,17 @@ a = Analysis(
     pathex=['src'],
     binaries=[],
     datas=[
-        ('config', 'config'),  # Include config folder
-        ('logs', 'logs'),      # Include logs folder
+        ('config', 'config'),
+        ('logs', 'logs'),
+        ('README.md', '.')
     ],
     hiddenimports=[
         'telethon',
         'flask',
         'python-dotenv',
+        'queue',
+        'threading',
+        'asyncio'
     ],
     hookspath=[],
     hooksconfig={},
@@ -22,7 +26,7 @@ a = Analysis(
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
-    noarchive=False,
+    noarchive=False
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
@@ -39,9 +43,10 @@ exe = EXE(
     upx=True,
     console=True,
     disable_windowed_traceback=False,
+    argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
-    entitlements_file=None,
+    entitlements_file=None
 )
 
 coll = COLLECT(
@@ -52,5 +57,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='TelegramClient',
+    name='TelegramClient'
 )
