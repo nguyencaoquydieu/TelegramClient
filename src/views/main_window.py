@@ -5,8 +5,8 @@ import threading
 import os
 import json
 import uuid
-from ..controllers.api_controller import APIController
-from ..utils.logger_config import setup_logger
+from src.controllers.api_controller import APIController
+from src.utils.logger_config import setup_logger
 
 # Setup logger
 logger = setup_logger('telegram_ui')

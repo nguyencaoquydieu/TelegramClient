@@ -1,9 +1,12 @@
 import tkinter as tk
-import sys
 import os
+import sys
+from pathlib import Path
 
-# Add the src directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add src directory to Python path
+src_dir = str(Path(__file__).parent.parent)
+if src_dir not in sys.path:
+    sys.path.append(src_dir)
 
 from src.views.main_window import MainWindow
 

@@ -1,2 +1,5 @@
 python-telegram-bot==20.0
-python-dotenv==0.19.2
+telethon==1.28.5
+flask==2.3.3
+python-dotenv==1.0.0
+pyinstaller==6.1.0
