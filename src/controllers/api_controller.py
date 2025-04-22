@@ -6,6 +6,7 @@ from telethon import TelegramClient, events
 import asyncio
 import json
 import os
+import re
 from datetime import datetime
 from src.views.components.code_dialog import CodeInputDialog
 
@@ -197,18 +198,18 @@ class APIController:
                     
                     # Wait for response
                     while (datetime.now() - sent_time).seconds < 30:
-                        if self.responses[phone]:
+                        if self.responses[phone] != None:
                             response_time = (datetime.now() - sent_time).seconds
-                            # Use Python's built-in string literal evaluation
-                            decoded_response = bytes(self.responses[phone], 'utf-8').decode('unicode_escape')
-                            
+                            response = self.responses[phone]
+
+                            # Use Python's built-in string literal evaluation                            
                             self.view.log_message(
-                                f"Received response from {destination} in {response_time}s: {decoded_response}"
+                                f"Received response from {destination} in {response_time}s: {response}"
                             )
                             return {
                                 'success': True,
                                 'message': f'Message sent to {destination}',
-                                'response': decoded_response,  # Use decoded response
+                                'response': response,  # Use decoded response
                                 'phone': phone,
                                 'timestamp': datetime.now().isoformat(),
                                 'response_time': response_time

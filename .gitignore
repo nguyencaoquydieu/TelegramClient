@@ -1,5 +1,7 @@
 .vscode/
+build/
 config/telegram_credentials.json
+dist/
 logs/
 src/.env
 src/.env.local
@@ -10,5 +12,4 @@ src/user_session.session
 .env
 user_session.session
 telegram_session*
-dist/
-build/
+TelegramClient.zip

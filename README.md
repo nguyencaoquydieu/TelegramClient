@@ -31,9 +31,10 @@ TelegramClient/
 
 ## Installation
 
-1. Extract all files from TelegramClient.tar.gz
-2. Run TelegramClient.exe
-3. First run will create example configuration
+1. Make sure Python 3.9+ is installed on your system
+2. Extract all files from TelegramClient.zip
+3. Run TelegramClient.bat
+4. First run will create example configuration
 
 ## Configuration
 
