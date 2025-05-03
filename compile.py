@@ -44,6 +44,29 @@ def compile_dir(src_dir, dest_dir):
                 continue
             compile_dir(src_path, dest_path)
 
+def create_zip_archive():
+    """Create ZIP archive of dist folder"""
+    import zipfile
+    from datetime import datetime
+    
+    # Get current timestamp for zip name
+    zip_name = f'TelegramClient.zip'
+    
+    print(f"Creating ZIP archive: {zip_name}")
+    
+    # Create zip file
+    with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # Walk through dist directory
+        for root, _, files in os.walk('dist'):
+            for file in files:
+                file_path = os.path.join(root, file)
+                # Add file to zip with relative path
+                arc_name = os.path.relpath(file_path, 'dist')
+                zipf.write(file_path, arc_name)
+                # zipf.write(file_path, os.path.join('TelegramClient', arc_name))
+    
+    print(f"ZIP archive created successfully: {zip_name}")
+
 def build_package():
     """Build the distribution package"""
     print("Starting build process...")
@@ -164,6 +187,9 @@ if __name__ == "__main__":
     shutil.copy2('README.md', package_dir)
     
     print("Build completed successfully!")
+    
+    # Create ZIP archive
+    create_zip_archive()
 
 if __name__ == "__main__":
     build_package()

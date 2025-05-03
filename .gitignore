@@ -13,3 +13,4 @@ src/user_session.session
 user_session.session
 telegram_session*
 TelegramClient.zip
+src/config/telegram_credentials.json

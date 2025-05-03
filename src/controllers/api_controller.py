@@ -16,10 +16,11 @@ class APIController:
         self.api_running = False
         self.app = Flask(__name__)
         self.server_thread = None
+        self.loop_thread = None # Thread for the asyncio event loop
         self.loop = None
         self.clients = {}  # Dictionary to store multiple clients
         self.responses = {}  # Dictionary to store responses for each client
-        self.request_locks = {}  # Locks for each phone number
+        self.global_request_lock = Lock() # Global lock for handling send requests one by one
         self.request_queue = Queue()  # Queue for handling multiple requests
         
         # Register Flask routes
@@ -49,11 +50,6 @@ class APIController:
                                 f"Received response for {phone_number}: {event.message.text}"
                             )
                     return handle_new_message
-                
-                # Initialize locks for each phone number
-                for cred in all_credentials:
-                    phone = cred['phone']
-                    self.request_locks[phone] = Lock()
                 
                 # Initialize and start each client
                 for cred in all_credentials:
@@ -90,6 +86,11 @@ class APIController:
                     self.clients[phone] = client
                     self.view.log_message(f"Client authenticated for {phone}")
                 
+                # Start the asyncio event loop in a separate thread
+                self.loop_thread = threading.Thread(target=self._run_loop)
+                self.loop_thread.daemon = True
+                self.loop_thread.start()
+                
                 # Start Flask in a separate thread
                 self.server_thread = threading.Thread(target=self._run_server)
                 self.server_thread.daemon = True
@@ -107,19 +108,19 @@ class APIController:
     def stop_api(self):
         """Stop the Flask API server"""
         try:
-            if self.api_running:
-                # Clear all locks
-                for lock in self.request_locks.values():
-                    if lock.locked():
-                        lock.release()
-                self.request_locks.clear()
-                
+                # Stop the asyncio event loop first
+                if self.loop and self.loop.is_running():
+                    self.view.log_message("Stopping asyncio event loop...")
+                    self.loop.call_soon_threadsafe(self.loop.stop) # Request loop stop
+                if self.loop_thread:
+                    self.loop_thread.join(timeout=5) # Wait for loop thread to finish
+                    if self.loop_thread.is_alive():
+                        self.view.log_message("Event loop thread did not stop gracefully.", 'warning')
+                self.loop = None # Clear the loop reference
+
                 # Shutdown all clients
                 for phone, client in self.clients.items():
                     self.view.log_message(f"Disconnecting client for {phone}")
-                    client.disconnect()
-                self.clients.clear()
-                
                 # Stop Flask server
                 self.api_running = False
                 self.view.update_api_status("Stopped", "red")  # Update status here
@@ -133,8 +134,23 @@ class APIController:
         """Run Flask server in thread"""
         self.app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
+    def _run_loop(self):
+        """Run the asyncio event loop."""
+        asyncio.set_event_loop(self.loop)
+        self.view.log_message("Asyncio event loop started.")
+
+        try:
+            self.loop.run_forever()
+        finally:
+            self.loop.close()
+
     def _handle_send_message(self):
         """Handle send message request"""
+        # Acquire the global lock before processing the request
+        # Wait indefinitely until the lock is available to ensure sequential processing
+        self.view.log_message("Attempting to acquire global request lock...")
+        self.global_request_lock.acquire()
+        self.view.log_message("Global request lock acquired.")
         try:
             data = request.json
             self.view.log_message(f"Received send-message request: {json.dumps(data)}")
@@ -172,84 +188,116 @@ class APIController:
                     'available_phones': available_phones
                 }), 404
             
-            # Check if phone is currently processing a request
-            if not self.request_locks[phone].acquire(blocking=False):
-                self.view.log_message(
-                    f"Phone {phone} is busy processing another request", 
-                    'warning'
-                )
-                return jsonify({
-                    'error': 'Phone is busy',
-                    'message': f'Phone {phone} is currently processing another request',
-                    'retry_after': 5  # Suggest retry after 5 seconds
-                }), 429  # Too Many Requests
-            
             try:
                 # Clear any previous response
                 self.responses[phone] = None
                 self.view.log_message(f"Sending message to {destination} using {phone}")
-                
+            
                 # Send message and wait for response
                 async def send_and_wait():
-                    # Send message
-                    await self.clients[phone].send_message(destination, message)
-                    sent_time = datetime.now()
-                    self.view.log_message(f"Message sent to {destination}")
-                    
-                    # Wait for response
-                    while (datetime.now() - sent_time).seconds < 30:
-                        if self.responses[phone] != None:
-                            response_time = (datetime.now() - sent_time).seconds
-                            response = self.responses[phone]
-
-                            # Use Python's built-in string literal evaluation                            
-                            self.view.log_message(
-                                f"Received response from {destination} in {response_time}s: {response}"
-                            )
+                    destination_id = None # Initialize destination_id
+                    try:
+                        # Resolve destination to entity/ID *before* sending
+                        try:
+                            # Use get_entity which works with usernames, phone numbers, or IDs
+                            entity = await self.clients[phone].get_entity(destination)
+                            destination_id = entity.id
+                            self.view.log_message(f"Resolved destination '{destination}' to ID: {destination_id}")
+                        except ValueError: # Handle case where destination is not found
+                            self.view.log_message(f"Could not find entity for destination: {destination}", 'error')
                             return {
-                                'success': True,
-                                'message': f'Message sent to {destination}',
-                                'response': response,  # Use decoded response
+                                'success': False,
+                                'error': 'Destination not found',
+                                'message': f'Could not resolve Telegram entity for {destination}',
                                 'phone': phone,
-                                'timestamp': datetime.now().isoformat(),
-                                'response_time': response_time
+                                'timestamp': datetime.now().isoformat()
                             }
-                        await asyncio.sleep(1)
-                    
-                    # Timeout case
-                    self.view.log_message(
-                        f"No response received from {destination} after 30 seconds", 
-                        'warning'
-                    )
-                    return {
-                        'success': True,
-                        'message': f'Message sent to {destination}',
-                        'response': None,
-                        'phone': phone,
-                        'timestamp': datetime.now().isoformat(),
-                        'status': 'timeout',
-                        'timeout': 30
-                    }
+                        except Exception as e: # Catch other potential errors during entity resolution
+                            self.view.log_message(f"Error resolving entity {destination}: {str(e)}", 'error')
+                            raise # Re-raise to be caught by the outer handler which returns 500
+
+                        # Clear previous response before sending
+                        self.responses[phone] = None
+                        
+                        # Send message using the resolved entity ID
+                        await self.clients[phone].send_message(destination_id, message)
+                        sent_time = datetime.now()
+                        self.view.log_message(f"Message sent to {destination} (ID: {destination_id}) at {sent_time}")
+                        
+                        # Wait for the full timeout period, allowing the handler to update the response
+                        timeout_seconds = 10
+                        elapsed_time = 0
+                        while elapsed_time < timeout_seconds:
+                            await asyncio.sleep(1) # Check every second
+                            elapsed_time = (datetime.now() - sent_time).seconds
+                            # Optional: Log waiting progress
+                            # self.view.log_message(f"Waiting for response... {elapsed_time}/{timeout_seconds}s elapsed.")
+                        
+                        # After waiting, check the final response captured by the handler
+                        final_response_data = self.responses.get(phone) # Use .get for safety
+                        response_time = (datetime.now() - sent_time).total_seconds() # Use total_seconds for precision
+                        final_response_text = None
+                        # status = 'timeout' # Default status
+
+                        # if final_response_data is not None:
+                        #     response_sender_id, response_text = final_response_data
+                        #     # Check if the response came from the intended destination
+                        #     if response_sender_id == destination_id:
+                        #         final_response_text = response_text
+                        #         status = 'received'
+                        #         self.view.log_message(
+                        #             f"Matching response received from {destination} (ID: {destination_id}) within {timeout_seconds}s: {final_response_text}"
+                        #         )
+                        #     else:
+                        #         # A response was received, but from someone else
+                        #         status = 'received_other'
+                        #         self.view.log_message(
+                        #             f"Response received within {timeout_seconds}s, but from unexpected sender (ID: {response_sender_id}) instead of {destination_id}. Message: {response_text}",
+                        #             'warning'
+                        #         )
+                        # else:
+                        #     self.view.log_message(
+                        #         f"No response received from {destination} (ID: {destination_id}) after {timeout_seconds} seconds",
+                        #         'warning'
+                        #     )
+
+                        return {
+                            'success': True, # Message sending itself was successful (unless get_entity failed)
+                            'message': f'Message sent to {destination}',
+                            'phone': phone,
+                            'timestamp': datetime.now().isoformat(),
+                            'response_time': response_time,
+                            'response': final_response_data,
+                        }
+                    except Exception as e:
+                        self.view.log_message(f"Error in send_and_wait: {str(e)}", 'error')
+                        # Ensure response is cleared on error too
+                        self.responses[phone] = None
+                        raise
                 
-                result = self.loop.run_until_complete(send_and_wait())
-                self.view.log_message(f"Request completed: {json.dumps(result)}")
-                return jsonify(result), 200
-                
-            finally:
-                # Always release the lock
-                self.request_locks[phone].release()
-                
+                future = asyncio.run_coroutine_threadsafe(send_and_wait(), self.loop)
+                # Add a timeout to future.result() to prevent indefinite blocking
+                try:
+                    # Wait for max 40 seconds (slightly longer than internal timeout)
+                    result = future.result(timeout=40) 
+                    self.view.log_message(f"Request completed: {json.dumps(result)}")
+                except TimeoutError:
+                    self.view.log_message("Coroutine execution timed out.", 'error')
+                    return jsonify({'error': 'Request timed out', 'message': 'The Telegram operation took too long.'}), 504 # Gateway Timeout
+                # Return 200 OK even if destination lookup failed, as the error is in the result JSON
+                return jsonify(result), 200 if result.get('success') is not False else 404                
+            except Exception as e:
+                raise e;
         except Exception as e:
-            # Release lock if error occurs
-            if phone in self.request_locks:
-                self.request_locks[phone].release()
-            
             error_msg = f"Error processing request: {str(e)}"
             self.view.log_message(error_msg, 'error')
             return jsonify({
                 'error': str(e),
                 'type': type(e).__name__
             }), 500
+        finally:
+            # Always release the global lock when done processing or if an error occurred
+            self.global_request_lock.release()
 
     def is_running(self):
         """Return current API status"""
